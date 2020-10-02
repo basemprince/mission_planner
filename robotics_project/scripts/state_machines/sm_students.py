@@ -71,7 +71,7 @@ class StateMachine(object):
 
     def check_states(self):
 
-        while not rospy.is_shutdown() and self.state != 4:
+        while not rospy.is_shutdown():
 
             # State 0: home
             if self.state == 0:
@@ -88,7 +88,7 @@ class StateMachine(object):
                 else:
                     self.play_motion_ac.cancel_goal()
                     rospy.logerr("%s: play_motion failed to tuck arm, reset simulation", self.node_name)
-                    self.state = 5
+                    self.state = 10
                 rospy.sleep(1)
             
             # State 0: Move the robot to table
@@ -108,8 +108,27 @@ class StateMachine(object):
             #     self.state = 1
             #     rospy.sleep(1)
 
-            # State 1:  pick the cube
+            # State 1:  Lower robot head service
             if self.state == 1:
+            	try:
+                    rospy.loginfo("%s: Lowering robot head", self.node_name)
+                    move_head_srv = rospy.ServiceProxy(self.mv_head_srv_nm, MoveHead)
+                    move_head_req = move_head_srv("down")
+                    
+                    if move_head_req.success == True:
+                        self.state = 2
+                        rospy.loginfo("%s: Move head down succeded!", self.node_name)
+                    else:
+                        rospy.loginfo("%s: Move head down failed!", self.node_name)
+                        self.state = 10
+
+                    rospy.sleep(3)
+                
+                except rospy.ServiceException, e:
+                    print "Service call to move_head server failed: %s"%e
+
+            # State 2:  pick the cube
+            if self.state == 2:
 
                 pick_pose = PoseStamped()
                 pick_pose.header.frame_id = 'base_footprint'
@@ -134,17 +153,17 @@ class StateMachine(object):
 
                     if pickup_request.success == True:
                         rospy.loginfo("%s: Picked up")
-                        self.state = 2
+                        self.state = 3
                     else:
                         rospy.loginfo("%s: failed to pick up")
-                        self.state = 5
+                        self.state = 10
 
                     rospy.sleep(1)
                 except rospy.ServiceException, e:
                     print "Service call to pick server failed: %s"%e
 
-            # State 2: Turn the robot
-            if self.state == 2:
+            # State 3: Turn the robot
+            if self.state == 3:
                 move_msg = Twist()
                 move_msg.angular.z = -1
 
@@ -157,12 +176,12 @@ class StateMachine(object):
                     rate.sleep()
                     cnt = cnt + 1
 
-                self.state = 3
+                self.state = 4
                 rospy.sleep(1)
 
 
-            # State 3: Move to 2nd table
-            if self.state == 3:
+            # State 4: Move to 2nd table
+            if self.state == 4:
                 move_msg = Twist()
                 move_msg.linear.x = 0.5
 
@@ -170,16 +189,16 @@ class StateMachine(object):
                 converged = False
                 cnt = 0
                 rospy.loginfo("%s: Moving towards table", self.node_name)
-                while not rospy.is_shutdown() and cnt < 19:
+                while not rospy.is_shutdown() and cnt < 17:
                     self.cmd_vel_pub.publish(move_msg)
                     rate.sleep()
                     cnt = cnt + 1
 
-                self.state = 4
+                self.state = 5
                 rospy.sleep(1)
 
-            # State 4:  drop the cube
-            if self.state == 4:
+            # State 5:  drop the cube
+            if self.state == 5:
 
                 try:
                     rospy.loginfo("%s: dropping the cube...", self.node_name)
@@ -189,14 +208,32 @@ class StateMachine(object):
 
                     if drop_cube_request.success == True:
                         rospy.loginfo("%s: Placed cube")
-                        self.state = 5
+                        self.state = 6
                     else:
                         rospy.loginfo("%s: failed to place the cube")
-                        self.state = 5
+                        self.state = 10
 
                     rospy.sleep(1)
                 except rospy.ServiceException, e:
                     print "Service call to place server failed: %s"%e
+
+            # State 6: home
+            if self.state == 6:
+                rospy.loginfo("%s: Tucking the arm...", self.node_name)
+                goal = PlayMotionGoal()
+                goal.motion_name = 'home'
+                goal.skip_planning = True
+                self.play_motion_ac.send_goal(goal)
+                success_tucking = self.play_motion_ac.wait_for_result(rospy.Duration(100.0))
+                
+                if success_tucking:
+                    rospy.loginfo("%s: Arm Tucked.", self.node_name)
+                else:
+                    self.play_motion_ac.cancel_goal()
+                    rospy.logerr("%s: play_motion failed to tuck arm, reset simulation", self.node_name)
+                    self.state = 10
+                rospy.sleep(1)
+
 
             # State 2:  Move the robot "manually" to chair
             # if self.state == 2:
@@ -223,27 +260,9 @@ class StateMachine(object):
             #     self.state = 3
             #     rospy.sleep(1)
 
-            # State 3:  Lower robot head service
-            if self.state == 2:
-            	try:
-                    rospy.loginfo("%s: Lowering robot head", self.node_name)
-                    move_head_srv = rospy.ServiceProxy(self.mv_head_srv_nm, MoveHead)
-                    move_head_req = move_head_srv("down")
-                    
-                    if move_head_req.success == True:
-                        self.state = 4
-                        rospy.loginfo("%s: Move head down succeded!", self.node_name)
-                    else:
-                        rospy.loginfo("%s: Move head down failed!", self.node_name)
-                        self.state = 5
-
-                    rospy.sleep(3)
-                
-                except rospy.ServiceException, e:
-                    print "Service call to move_head server failed: %s"%e
 
             # Error handling
-            if self.state == 5:
+            if self.state == 10:
                 rospy.logerr("%s: State machine failed. Check your code and try again!", self.node_name)
                 return
 
