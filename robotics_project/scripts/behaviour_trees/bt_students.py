@@ -15,7 +15,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			name="Go to door fallback", 
 			children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
 		)
-
+		pt.
 		# tuck the arm
 		b1 = tuckarm()
 
