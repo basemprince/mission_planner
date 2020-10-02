@@ -1,0 +1,58 @@
+{
+    "configurations": [
+        {
+            "browse": {
+                "databaseFilename": "",
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "includePath": [
+                "/home/b/s/bshaker/catkin_ws/devel/include/**",
+                "/opt/ros/melodic/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/aruco_ros/aruco/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/aruco_ros/aruco_ros/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/backward_ros/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/combined_robot_hw/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/combined_robot_hw_tests/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/controller_interface/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/controller_manager/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/controller_manager_tests/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/diff_drive_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/dynamic_introspection/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/eband_local_planner/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/effort_controllers/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/force_torque_sensor_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/forward_command_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/four_wheel_steering_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/gazebo_ros_pkgs/gazebo_plugins/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/gazebo_ros_pkgs/gazebo_ros/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/gazebo_ros_pkgs/gazebo_ros_control/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/gripper_action_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/hardware_interface/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/imu_sensor_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/joint_limits_interface/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/joint_state_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/joint_torque_sensor_state_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/joint_trajectory_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/mode_state_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/pal_gazebo_plugins/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/pal_hardware_gazebo/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/pal_hardware_interfaces/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/pal_statistics/pal_statistics/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/play_motion/play_motion/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/position_controllers/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/temperature_sensor_controller/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/tf_lookup/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_control/transmission_interface/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/twist_mux/include/**",
+                "/home/b/s/bshaker/catkin_ws/src/robi_final_project/ros_controllers/velocity_controllers/include/**",
+                "/usr/include/**"
+            ],
+            "name": "ROS",
+            "intelliSenseMode": "gcc-x64",
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++14"
+        }
+    ],
+    "version": 4
+}
