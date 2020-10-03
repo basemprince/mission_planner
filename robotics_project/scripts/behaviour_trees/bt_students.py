@@ -71,10 +71,10 @@ class detect_cube(pt.behaviour.Behaviour):
 			rospy.sleep(rospy.Duration(1.0))
 			if cube_pose == None:
 				print('############### Once: Cube NOT Detected!')
-				return pt.common.Status.FAILURE
+				return pt.common.Status.SUCCESS
 			else:
 				print('############### Once: Cube Detected!')
-				return pt.common.Status.SUCCESS
+				return pt.common.Status.FAILURE
 
 		else:
 			# already detected cube
@@ -254,11 +254,11 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 
 		# check if cube is placed
-		b9 = pt.composites.Selector(
+		b9 = pt.composites.Sequence(
 			name="Go to table fallback",
 			children=[detect_cube("once"), b4562]
 		)
-
+		print(b9.status())
 
 		# go back to first table when cube is not detected
 		#b10 = 0
