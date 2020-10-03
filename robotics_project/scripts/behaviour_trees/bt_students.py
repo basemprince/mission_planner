@@ -7,8 +7,10 @@ from reactive_sequence import RSequence
 from std_msgs.msg import *
 from std_srvs.srv import *
 from geometry_msgs.msg import PoseStamped
+import functools
 
 cube_pose = None
+
 def cube_pose_cb(data):
 	global cube_pose
 	cube_pose = data
@@ -32,7 +34,7 @@ def cube_pose_publish():
 
 	cube_pub.publish(pose_msg)
 
-
+start_over = False
 class detect_cube(pt.behaviour.Behaviour):
 
 	"""
@@ -60,34 +62,42 @@ class detect_cube(pt.behaviour.Behaviour):
 		# execution checker
 		self.detected = False
 		self.finished = False
-
+		self.first = True
 		# become a behaviour
 		super(detect_cube, self).__init__("Detect Cube "+param+"!")
 
 
 	def update(self):
+		global cube_pose
+		global start_over
+		if self.first:
+			cube_pose = None
+			self.first = False
+			return pt.common.Status.RUNNING
 
-		if self.param == "once":
+		elif self.param == "once":
 			rospy.sleep(rospy.Duration(1.0))
 			if cube_pose == None:
 				print('############### Once: Cube NOT Detected!')
 				return pt.common.Status.SUCCESS
 			else:
 				print('############### Once: Cube Detected!')
+				start_over = True
 				return pt.common.Status.FAILURE
 
 		else:
 			# already detected cube
-			if self.finished:
+			if self.finished and not start_over:
 				#print('############### Finished.')
 				return pt.common.Status.SUCCESS
 
-			elif cube_pose == None:
+			if cube_pose == None:
+				start_over = False
 				#print('############### Cube None...')
 				return pt.common.Status.RUNNING
-			
 			else:
 				#print('############### Cube Detected!')
+				start_over = False
 				self.finished = True
 				return pt.common.Status.SUCCESS
 
@@ -251,14 +261,12 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			children=[b42, b52, b62]
 		)
 
-
-
 		# check if cube is placed
 		b9 = pt.composites.Sequence(
 			name="Go to table fallback",
 			children=[detect_cube("once"), b4562]
 		)
-		print(b9.status())
+
 
 		# go back to first table when cube is not detected
 		#b10 = 0
@@ -280,7 +288,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			name="Go to table fallback",
 		b456# move to chair
 		b3 = pt.composites.Selector(
-			name="Go to chair fallback",
+			name="Go to chair functoolsfallback",
 			children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
 		)
 
@@ -293,10 +301,23 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b456, b7, b8, b9])
 		super(BehaviourTree, self).__init__(tree)
 
+		def post_tick_handler(snapshot_visitor, behaviour_tree):
+			print(pt.display.ascii_tree(behaviour_tree.root,snapshot_information=snapshot_visitor))
+
+		
+		snapshot_visitor = pt.visitors.SnapshotVisitor()
+		self.add_post_tick_handler(functools.partial(post_tick_handler,snapshot_visitor))
+		self.visitors.append(snapshot_visitor)
+
+
 		# execute the behaviour tree
 		rospy.sleep(5)
 		self.setup(timeout=10000)
 		while not rospy.is_shutdown(): self.tick_tock(1)	
+
+
+
+
 
 
 if __name__ == "__main__":
@@ -309,3 +330,5 @@ if __name__ == "__main__":
 		pass
 
 	rospy.spin()
+
+
