@@ -10,7 +10,9 @@ from geometry_msgs.msg import PoseStamped, Twist
 from actionlib import SimpleActionClient
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
 from robotics_project.srv import MoveHead, MoveHeadRequest, MoveHeadResponse
-
+from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
+import tf
+import math 
 import functools
 
 
@@ -18,6 +20,8 @@ import functools
 start_over_handler = 1
 
 cube_pose = None
+nav_vel = Twist()
+
 def cube_pose_cb(data):
 	global cube_pose
 	cube_pose = data
@@ -42,7 +46,7 @@ def cube_pose_publish():
 
 	cube_pub.publish(pose_msg)
 
-nav_vel = Twist()
+
 def nav_vel_cb(data):
 	global nav_vel
 	nav_vel = data
@@ -453,7 +457,7 @@ class global_localization(pt.behaviour.Behaviour):
 		super(global_localization, self).__init__("global localization!")
 
 	def update(self):
-
+		# for looping
 		if self.start_over_count < start_over_handler:
 			self.done = False
 			self.tried = False
@@ -485,10 +489,12 @@ class goto(pt.behaviour.Behaviour):
 		self.table1_msg.pose.position.x = -1.0
 		self.table1_msg.pose.position.y = -6.0
 		self.table1_msg.pose.position.z = 0.0
-		self.table1_msg.pose.orientation.x = 0.0
-		self.table1_msg.pose.orientation.y = 0.0
-		self.table1_msg.pose.orientation.z = -0.7071068
-		self.table1_msg.pose.orientation.w = 0.7071068
+		q = tf.transformations.quaternion_from_euler(0,0,math.radians(-90))
+		self.table1_msg.pose.orientation.x = q[0]
+		self.table1_msg.pose.orientation.y = q[1]
+		self.table1_msg.pose.orientation.z = q[2]
+		self.table1_msg.pose.orientation.w = q[3]
+
 		self.table2_msg = PoseStamped()
 		#self.table2_msg.header.stamp
 		self.table2_msg.header.frame_id = "map"
@@ -501,9 +507,14 @@ class goto(pt.behaviour.Behaviour):
 		self.table2_msg.pose.orientation.w = 0.0
 
 
+		self.move_base_ac = SimpleActionClient("/move_base", MoveBaseAction)
+		self.goal =  MoveBaseGoal()
+		
+
+
 		# setup publisher
-		self.pub_nm = '/move_base_simple/goal'
-		self.goal_pub = rospy.Publisher(self.pub_nm, PoseStamped, queue_size=8)
+		# self.pub_nm = '/move_base_simple/goal'
+		# self.goal_pub = rospy.Publisher(self.pub_nm, PoseStamped, queue_size=8)
 
 		# execution checker
 		self.tried = False
@@ -523,9 +534,14 @@ class goto(pt.behaviour.Behaviour):
 		if not self.tried:
 			self.tried = True
 			if self.tag == "table1":
-				self.goal_pub.publish(self.table1_msg)
+				self.table1_msg.header.stamp = rospy.Time()
+				self.goal.target_pose = self.table1_msg
+				self.move_base_ac.send_goal(self.goal)
+				#self.goal_pub.publish(self.table1_msg)
 			elif self.tag == "table2":
-				self.goal_pub.publish(self.table2_msg)
+				self.goal.target_pose = self.table2_msg
+				self.move_base_ac.send_goal(self.goal)
+				#self.goal_pub.publish(self.table2_msg)
 
 		# if succesful
 		else:
@@ -657,9 +673,11 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			name="Go to table fallback",
 			children=[counter(15, "At table?"), go("Go to table!", 0.5, 0)]
 		)
-		# go to other table
-		b456 = pt.composites.Sequence(
-			name="Go to other table sequence",
+		# wait a bit for localization
+		b06 = pt.composites.Selector(
+			name="Wait fallback",
+			children=[counter(20, "Waited?"), go("Wait!", 0, 0)]
+		)
 			children=[b4, b5, b6]
 		)
 
@@ -740,8 +758,9 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		'''
 
 		# become the tree
-		tree = RSequence(name="Main sequence", children=[b0, b01, b02, b03, b04, b05, b06, b07])
+		tree = RSequence(name="Main sequence", children=[b0, b01, b02, b03, b04, b05])
 		super(BehaviourTree, self).__init__(tree)
+
 
 
 		# https://py-trees.readthedocs.io/en/release-0.6.x/visualisation.html
