@@ -85,7 +85,7 @@ class detect_cube(pt.behaviour.Behaviour):
 			else:
 				print('############### Once: Cube Detected!')
 				start_over = True
-				pt.BehaviourTree.destroy()
+				#pt.BehaviourTree.destroy()
 				#ptr.trees.BehaviourTree.destroy(self)
 				#BehaviourTree()
 				return pt.common.Status.FAILURE
