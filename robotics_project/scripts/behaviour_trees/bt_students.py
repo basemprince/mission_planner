@@ -10,6 +10,7 @@ from geometry_msgs.msg import PoseStamped
 import functools
 
 cube_pose = None
+start_over = None
 
 def cube_pose_cb(data):
 	global cube_pose
@@ -34,7 +35,7 @@ def cube_pose_publish():
 
 	cube_pub.publish(pose_msg)
 
-start_over = False
+
 class detect_cube(pt.behaviour.Behaviour):
 
 	"""
@@ -70,6 +71,7 @@ class detect_cube(pt.behaviour.Behaviour):
 	def update(self):
 		global cube_pose
 		global start_over
+
 		if self.first:
 			cube_pose = None
 			self.first = False
@@ -83,7 +85,11 @@ class detect_cube(pt.behaviour.Behaviour):
 			else:
 				print('############### Once: Cube Detected!')
 				start_over = True
+				pt.BehaviourTree.destroy()
+				#ptr.trees.BehaviourTree.destroy(self)
+				#BehaviourTree()
 				return pt.common.Status.FAILURE
+
 
 		else:
 			# already detected cube
@@ -105,7 +111,7 @@ class detect_cube(pt.behaviour.Behaviour):
 class pickplace_cube(pt.behaviour.Behaviour):
 
 	"""
-	Returns running and commands a velocity indefinitely.
+	Picks or places a cube when called based on the behaviour string.
 	"""
 
 	global cube_pose
@@ -120,8 +126,8 @@ class pickplace_cube(pt.behaviour.Behaviour):
 
 		# setup services
 		self.pick_srv_nm = rospy.get_param(rospy.get_name() + '/pick_srv')
-		self.place_srv_nm = rospy.get_param(rospy.get_name() + '/place_srv')
 		rospy.wait_for_service(self.pick_srv_nm, timeout=30)
+		self.place_srv_nm = rospy.get_param(rospy.get_name() + '/place_srv')
 		rospy.wait_for_service(self.place_srv_nm, timeout=30)
 		self.pick_srv = rospy.ServiceProxy(self.pick_srv_nm, SetBool)
 		self.place_srv = rospy.ServiceProxy(self.place_srv_nm, SetBool)
@@ -222,21 +228,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			children=[counter(16, "At table?"), go("Go to table!", 0.5, 0)]
 		)
 
-		# go to other table
-		b456 = pt.composites.Sequence(
-			name="Go to other table sequence",
-			children=[b4, b5, b6]
-		)
-
-		# place the cube
-		b7 = pickplace_cube("place")
-
-
-		# tuck the arm
-		b8 = tuckarm()
-
-
-
 		# turn 180
 		b42 = pt.composites.Selector(
 			name="Turn 180 fallback",
@@ -256,6 +247,20 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		)
 
 		# go to other table
+		b456 = pt.composites.Sequence(
+			name="Go to other table sequence",
+			children=[b4, b5, b6]
+		)
+
+		# place the cube
+		b7 = pickplace_cube("place")
+
+
+		# tuck the arm
+		b8 = tuckarm()
+
+
+		# go to other table
 		b4562 = pt.composites.Sequence(
 			name="Go to other table sequence",
 			children=[b42, b52, b62]
@@ -272,35 +277,12 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		#b10 = 0
 
 
-		'''
-
-		# go to door until at door
-		b0 = pt.composites.Selector(
-			name="Go to door fallback", 
-			children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
-		)
-
-		# tuck the arm
-		b1 = tuckarm()
-
-		# go to table
-		b2 = pt.composites.Selector(
-			name="Go to table fallback",
-		b456# move to chair
-		b3 = pt.composites.Selector(
-			name="Go to chair functoolsfallback",
-			children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
-		)
-
-		# lower head
-		b4 = movehead("down")
-
-		'''
-
 		# become the tree
 		tree = RSequence(name="Main sequence", children=[b0, b1, b2, b3, b456, b7, b8, b9])
 		super(BehaviourTree, self).__init__(tree)
 
+
+		# to visualize the tree
 		def post_tick_handler(snapshot_visitor, behaviour_tree):
 			print(pt.display.ascii_tree(behaviour_tree.root,snapshot_information=snapshot_visitor))
 
@@ -314,9 +296,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		rospy.sleep(5)
 		self.setup(timeout=10000)
 		while not rospy.is_shutdown(): self.tick_tock(1)	
-
-
-
 
 
 
