@@ -496,9 +496,11 @@ class global_localization(pt.behaviour.Behaviour):
 
 		# setup service
 		self.srv_nm = '/global_localization'
-		rospy.wait_for_service(self.srv_nm, timeout=30)
-		self.global_localization_srv = rospy.ServiceProxy(self.srv_nm, Empty)
 
+		rospy.wait_for_service(self.srv_nm, timeout=30)
+		
+		self.global_localization_srv = rospy.ServiceProxy(self.srv_nm, Empty)
+		
 		# execution checker
 		self.tried = False
 		self.done = False
@@ -532,6 +534,7 @@ class global_localization(pt.behaviour.Behaviour):
 		else:
 			self.done = True
 			kidnap_feedback1 = False
+			
 			return pt.common.Status.SUCCESS
 
 
@@ -635,6 +638,11 @@ class goto_action(pt.behaviour.Behaviour):
 		self.table2_msg.pose.orientation.w = q[3]
 
 
+
+		#self.clear = rospy.get_param(rospy.get_name() +'/clear_costmaps_srv')
+		self.clear = '/move_base/clear_costmaps'
+		rospy.wait_for_service(self.clear, timeout=30)
+		self.clearmap_srv = rospy.ServiceProxy(self.clear, Empty)
 		# setup action
 		self.goto_ac = SimpleActionClient('/move_base', MoveBaseAction)
 		#self.goto_ac.wait_for_server()
@@ -648,13 +656,18 @@ class goto_action(pt.behaviour.Behaviour):
 		super(goto_action, self).__init__("goto "+tag+"!")
 
 	def update(self):
-
+		global kidnapped
 		if self.start_over_count < start_over_handler:
 			self.done = False
 			self.tried = False
 			self.start_over_count += 1
 
-		if not self.tried:
+		if kidnapped:
+			self.done = False
+			self.tried = False
+			
+		self.clearmap_req = self.clearmap_srv()	
+		if not self.tried:	
 			if self.tag == "table1":
 				goal = MoveBaseGoal()
 				goal.target_pose = self.table1_msg
@@ -668,7 +681,7 @@ class goto_action(pt.behaviour.Behaviour):
 				self.goto_ac.send_goal(goal)
 
 			self.tried = True
-			return pt.common.Status.RUNNING
+			return pt.common.Status.FAILURE
 
 		state = self.goto_ac.get_state()
 		if state == 3:
@@ -678,7 +691,7 @@ class goto_action(pt.behaviour.Behaviour):
 		if self.done:
 			return pt.common.Status.SUCCESS
 		else:
-			return pt.common.Status.RUNNING
+			return pt.common.Status.FAILURE
 
 
 class standstill(pt.behaviour.Behaviour):
@@ -747,7 +760,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		# turn in a circle
 		b03 = pt.composites.Selector(
 			name="Turn 360 fallback",
-			children=[counter(62, "Turned?"), go("Turn!", 0, -1)]
+			children=[counter(82, "Turned?"), go("Turn!", 0, -1)]
 		)
 
 
