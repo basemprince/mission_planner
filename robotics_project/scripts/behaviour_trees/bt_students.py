@@ -1,75 +1,36 @@
 #!/usr/bin/env python
 
+"""
+	# Tom Moeller
+	# tommol@kth.se
+	# 
+	# Basem Shaker
+	# 
+"""
+
 import py_trees as pt, py_trees_ros as ptr, rospy
 #from behaviours_student import *
 from reactive_sequence import RSequence
 
 from std_msgs.msg import *
 from std_srvs.srv import *
-from geometry_msgs.msg import PoseStamped, Twist
+from geometry_msgs.msg import PoseStamped, Twist, PoseWithCovarianceStamped
 from actionlib import SimpleActionClient
 from play_motion_msgs.msg import PlayMotionAction, PlayMotionGoal
 from robotics_project.srv import MoveHead, MoveHeadRequest, MoveHeadResponse
 from move_base_msgs.msg import MoveBaseAction, MoveBaseGoal
-from geometry_msgs.msg import PoseWithCovarianceStamped
 import tf, math
+from gazebo_msgs.srv import SetModelState
+from gazebo_msgs.msg import ModelState
+from actionlib_msgs.msg import GoalStatus
 
 import functools
 
 
 # remember current cycle (for part A)
 start_over_handler = 1
-kidnapped = True
-kidnap_feedback = False
-kidnap_feedback1 = False
+
 cube_pose = None
-poseCov = PoseWithCovarianceStamped()
-
-def poseCallBack (data):
-	global poseCov
-	poseCov = data
-
-
-class check_kidnap(pt.behaviour.Behaviour):
-
-	"""
-	Sends a goal to the tuck arm action server.
-	Returns running whilst awaiting the result,
-	success if the action was succesful, and v.v..
-	"""
-
-	# get global variable (target of callback)
-
-	def __init__(self, param=""):
-		# get param
-		self.param = param
-		# set subscriber
-		self.kidnap_msg = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped,poseCallBack)
-		self.x_warn = 0.2
-		self.y_warn = 0.2
-		self.yaw_warn = 0.1
-		# become a behaviour
-		super(check_kidnap, self).__init__("check kidnap "+param+"!")
-
-
-	def update(self):
-		global poseCov
-		global kidnapped
-		global kidnap_feedback
-		std_x = math.sqrt(poseCov.pose.covariance[6*0+0])
-		std_y = math.sqrt(poseCov.pose.covariance[6*1+1])
-		std_yaw = math.sqrt(poseCov.pose.covariance[6*5+5])
-
-		if (std_x > self.x_warn or std_y > self.y_warn or std_yaw > self.yaw_warn):
-			kidnapped = True
-			return pt.common.Status.FAILURE
-		else:
-			kidnapped = False
-			return pt.common.Status.SUCCESS
-
-
-
-
 def cube_pose_cb(data):
 	global cube_pose
 	cube_pose = data
@@ -110,6 +71,15 @@ def get_summed_twist(twist_msg):
 	return tsum
 
 
+do_orientation = True
+do_global_loc = True
+pose_cov = PoseWithCovarianceStamped()
+def pose_cov_cb(data):
+	global pose_cov
+	pose_cov = data
+	#print(pose_cov.pose.pose.position.x)
+
+
 #########################################
 
 
@@ -133,9 +103,8 @@ class counter(pt.behaviour.Behaviour):
 		super(counter, self).__init__(name)
 
 	def update(self):
-		global kidnapped
-		global kidnap_feedback
-		if self.start_over_count < start_over_handler or (kidnapped and kidnap_feedback):
+
+		if self.start_over_count < start_over_handler:
 			self.i = 0
 			self.done = False
 			self.start_over_count += 1
@@ -148,10 +117,8 @@ class counter(pt.behaviour.Behaviour):
 			self.done = True
 		
 		if self.done:
-			kidnap_feedback = True
 			return pt.common.Status.SUCCESS
 		else:
-			kidnap_feedback = False
 			return pt.common.Status.FAILURE
 
 
@@ -356,7 +323,7 @@ class detect_cube(pt.behaviour.Behaviour):
 
 
 	def update(self):
-		global cube_pose, start_over_handler
+		global cube_pose, start_over_handler, do_respawn_cube
 
 		if self.first_run or self.start_over_count < start_over_handler:
 			cube_pose = None
@@ -366,6 +333,7 @@ class detect_cube(pt.behaviour.Behaviour):
 
 			self.start_over_count += 1
 
+			rospy.sleep(rospy.Duration(2.0))
 			return pt.common.Status.RUNNING
 
 		if self.param == "once_invert":
@@ -378,13 +346,21 @@ class detect_cube(pt.behaviour.Behaviour):
 				print('############### Once: Cube Detected!')
 				return pt.common.Status.FAILURE
 
-		if self.param == "once":
+		elif self.param == "once":
 			#rospy.sleep(rospy.Duration(1.0))
 			if cube_pose == None:
 				print('############### Once: Cube NOT Detected!')
 				return pt.common.Status.FAILURE
 			else:
 				print('############### Once: Cube Detected!')
+				return pt.common.Status.SUCCESS
+
+		elif self.param == "no_detection_reset":
+			if cube_pose == None:
+				start_over_handler += 1
+				do_respawn_cube = True
+				return pt.common.Status.FAILURE
+			else:
 				return pt.common.Status.SUCCESS
 
 
@@ -496,11 +472,9 @@ class global_localization(pt.behaviour.Behaviour):
 
 		# setup service
 		self.srv_nm = '/global_localization'
-
 		rospy.wait_for_service(self.srv_nm, timeout=30)
-		
 		self.global_localization_srv = rospy.ServiceProxy(self.srv_nm, Empty)
-		
+
 		# execution checker
 		self.tried = False
 		self.done = False
@@ -510,20 +484,18 @@ class global_localization(pt.behaviour.Behaviour):
 		super(global_localization, self).__init__("global localization!")
 
 	def update(self):
-		global kidnap_feedback1
-		global kidnapped
+		global do_global_loc, do_orientation
+
 		if self.start_over_count < start_over_handler:
 			self.done = False
 			self.tried = False
 			self.start_over_count += 1
 
-
-		if  kidnapped and not kidnap_feedback1:
-			self.tried = False
+		if do_global_loc:
 			self.done = False
-			kidnap_feedback1 = True
-
-
+			self.tried = False
+			do_global_loc = False
+			do_orientation = True
 
 		if not self.tried:
 			self.tried = True
@@ -533,8 +505,6 @@ class global_localization(pt.behaviour.Behaviour):
 		# if succesful
 		else:
 			self.done = True
-			kidnap_feedback1 = False
-			
 			return pt.common.Status.SUCCESS
 
 
@@ -596,7 +566,7 @@ class goto(pt.behaviour.Behaviour):
 				self.goal_pub.publish(self.table2_msg)
 
 			self.tried = True
-			return pt.common.Status.FAILURE
+			return pt.common.Status.RUNNING
 
 		# if succesful
 		else:
@@ -604,6 +574,7 @@ class goto(pt.behaviour.Behaviour):
 			return pt.common.Status.SUCCESS
 
 
+cancel_goto_action = False
 class goto_action(pt.behaviour.Behaviour):
 
 	def __init__(self, tag):
@@ -638,14 +609,14 @@ class goto_action(pt.behaviour.Behaviour):
 		self.table2_msg.pose.orientation.w = q[3]
 
 
-
-		#self.clear = rospy.get_param(rospy.get_name() +'/clear_costmaps_srv')
-		self.clear = '/move_base/clear_costmaps'
-		rospy.wait_for_service(self.clear, timeout=30)
-		self.clearmap_srv = rospy.ServiceProxy(self.clear, Empty)
 		# setup action
 		self.goto_ac = SimpleActionClient('/move_base', MoveBaseAction)
 		#self.goto_ac.wait_for_server()
+
+		# setup service
+		self.clear_costmaps_srv_nm = '/move_base/clear_costmaps'
+		rospy.wait_for_service(self.clear_costmaps_srv_nm, timeout=30)
+		self.clear_costmaps_srv = rospy.ServiceProxy(self.clear_costmaps_srv_nm, Empty)
 
 		# execution checker
 		self.tried = False
@@ -656,18 +627,21 @@ class goto_action(pt.behaviour.Behaviour):
 		super(goto_action, self).__init__("goto "+tag+"!")
 
 	def update(self):
-		global kidnapped
+		global cancel_goto_action, moving
+
+		if not self.done and cancel_goto_action:
+			cancel_goto_action = False
+			self.goto_ac.cancel_all_goals()
+			self.tried = False
+			clear_costmaps_req = self.clear_costmaps_srv()
+			return pt.common.Status.RUNNING
+
 		if self.start_over_count < start_over_handler:
 			self.done = False
 			self.tried = False
 			self.start_over_count += 1
 
-		if kidnapped:
-			self.done = False
-			self.tried = False
-			
-		self.clearmap_req = self.clearmap_srv()	
-		if not self.tried:	
+		if not self.done and not self.tried:
 			if self.tag == "table1":
 				goal = MoveBaseGoal()
 				goal.target_pose = self.table1_msg
@@ -681,22 +655,28 @@ class goto_action(pt.behaviour.Behaviour):
 				self.goto_ac.send_goal(goal)
 
 			self.tried = True
-			return pt.common.Status.FAILURE
-
-		state = self.goto_ac.get_state()
-		if state == 3:
-			self.done = True
+			print('###################################################')
+			return pt.common.Status.RUNNING
 
 		# if succesful
 		if self.done:
+			moving = False
 			return pt.common.Status.SUCCESS
 		else:
+			moving = True
+			state = self.goto_ac.get_state()
+			if state == GoalStatus.SUCCEEDED:
+				self.done = True
+			if state == GoalStatus.ABORTED:
+				self.tried = False
+
 			return pt.common.Status.FAILURE
 
 
+moving = False
 class standstill(pt.behaviour.Behaviour):
 
-	def __init__(self):
+	def __init__(self, n, threshold):
 
 		rospy.loginfo("Initialising stand still behaviour.")
 
@@ -708,17 +688,41 @@ class standstill(pt.behaviour.Behaviour):
 		self.done = False
 		self.start_over_count = 0
 
+		# counter
+		self.i = 0
+		self.n = n
+		
+		# param
+		self.threshold = threshold
+
 		# become a behaviour
 		super(standstill, self).__init__("stand still!")
 
 	def update(self):
-		global nav_vel
+		global nav_vel, moving, do_global_loc
 
 		if self.start_over_count < start_over_handler:
 			self.done = False
 			self.tried = False
 			self.start_over_count += 1
 
+
+		if moving:
+			if get_summed_twist(nav_vel) < self.threshold:
+				self.i += 1
+				print('#### Robot is standing still for ' + str(self.i) + '/' + str(self.n) + ' !')
+				if self.i > self.n:
+					self.i = 0
+					do_global_loc = True
+					moving = False
+					return pt.common.Status.FAILURE
+			else:
+				self.i = 0
+
+		else:
+			self. i = 0
+
+		'''
 		if not self.done:
 			self.tried = True
 			
@@ -732,7 +736,190 @@ class standstill(pt.behaviour.Behaviour):
 		else:
 			self.done = True
 			return pt.common.Status.SUCCESS
+		'''
 
+		return pt.common.Status.SUCCESS
+
+
+kidnapping_check_active = True
+class check_kidnapping(pt.behaviour.Behaviour):
+
+	def __init__(self):
+
+		rospy.loginfo("Initialising check kidnapping behaviour.")
+
+		# setup subscriber
+		self.pose_cov_sub = rospy.Subscriber('/amcl_pose', PoseWithCovarianceStamped, pose_cov_cb)
+
+		# execution checker
+		self.tried = False
+		self.done = False
+		self.start_over_count = 0
+
+		# become a behaviour
+		super(check_kidnapping, self).__init__("check kidnapping!")
+
+	def update(self):
+		global pose_cov, do_global_loc, kidnapping_check_active, cancel_goto_action
+
+		if self.start_over_count < start_over_handler:
+			self.done = False
+			self.tried = False
+			self.start_over_count += 1
+
+		# Source https://github.com/ros-planning/navigation/blob/noetic-devel/amcl/src/amcl_node.cpp
+
+		# do calculations
+		std_x = math.sqrt(pose_cov.pose.covariance[6*0+0])
+		std_y = math.sqrt(pose_cov.pose.covariance[6*1+1])
+		std_yaw = math.sqrt(pose_cov.pose.covariance[6*5+5])
+
+		std_warn_level_x_ = 0.21
+		std_warn_level_y_ = 0.21
+		std_warn_level_yaw_ = 0.11
+
+		if (std_x > std_warn_level_x_ or std_y > std_warn_level_y_ or std_yaw > std_warn_level_yaw_):
+			if kidnapping_check_active:
+				do_global_loc = True
+				#cancel_goto_action = True
+				kidnapping_check_active = False
+				return pt.common.Status.FAILURE
+			else:
+				return pt.common.Status.SUCCESS
+		else:
+			#kidnapping_check_active = True
+			return pt.common.Status.SUCCESS
+
+
+class orientation(pt.behaviour.Behaviour):
+	"""
+	Returns running and commands a velocity indefinitely.
+	"""
+
+	def __init__(self, n, linear, angular):
+
+		rospy.loginfo("Initialising orientation behaviour.")
+
+		# action space
+		#self.cmd_vel_top = rospy.get_param(rospy.get_name() + '/cmd_vel_topic')
+		self.cmd_vel_top = "/key_vel"
+		#rospy.loginfo(self.cmd_vel_top)
+		self.cmd_vel_pub = rospy.Publisher(self.cmd_vel_top, Twist, queue_size=10)
+
+		# command
+		self.move_msg = Twist()
+		self.move_msg.linear.x = linear
+		self.move_msg.angular.z = angular
+
+		# setup service
+		self.clear_costmaps_srv_nm = '/move_base/clear_costmaps'
+		rospy.wait_for_service(self.clear_costmaps_srv_nm, timeout=30)
+		self.clear_costmaps_srv = rospy.ServiceProxy(self.clear_costmaps_srv_nm, Empty)
+
+		# counter
+		self.i = 0
+		self.n = n
+		self.done = False
+		self.start_over_count = 0
+
+
+		# become a behaviour
+		super(orientation, self).__init__("do orientation!")
+
+	def update(self):
+		global do_orientation, kidnapping_check_active
+
+		if self.start_over_count < start_over_handler:
+			self.i = 0
+			self.done = False
+			self.start_over_count += 1
+
+		if do_orientation:
+			self.i = 0
+			self.done = False
+			do_orientation = False
+			clear_costmaps_req = self.clear_costmaps_srv()
+
+
+		# send the message
+		if not self.done:
+			rate = rospy.Rate(10)
+			self.cmd_vel_pub.publish(self.move_msg)
+			rate.sleep()
+
+		# increment i
+		self.i += 1
+
+		# succeed after count is done
+		if self.i > self.n:
+			self.done = True
+		
+		if self.done:
+			kidnapping_check_active = True
+			return pt.common.Status.SUCCESS
+		else:
+			return pt.common.Status.RUNNING
+
+
+do_respawn_cube = True
+class respawn_cube(pt.behaviour.Behaviour):
+
+	def __init__(self):
+
+		rospy.loginfo("Initialising global respawn cube behaviour.")
+
+		# setup service
+		self.srv_nm = '/gazebo/set_model_state'
+		rospy.wait_for_service(self.srv_nm, timeout=30)
+		self.respawn_cube_srv = rospy.ServiceProxy(self.srv_nm, SetModelState)
+
+		self.cube_state = ModelState()
+		self.cube_state.model_name = 'aruco_cube'
+		self.cube_state.pose.position.x = -1.130530
+		self.cube_state.pose.position.y = -6.653650
+		self.cube_state.pose.position.z = 0.86250
+		self.cube_state.pose.orientation.x = 0
+		self.cube_state.pose.orientation.y = 0
+		self.cube_state.pose.orientation.z = 0
+		self.cube_state.pose.orientation.w = 1
+		self.cube_state.twist.linear.x = 0
+		self.cube_state.twist.linear.y = 0
+		self.cube_state.twist.linear.z = 0
+		self.cube_state.twist.angular.x = 0
+		self.cube_state.twist.angular.y = 0
+		self.cube_state.twist.angular.z = 0
+		self.cube_state.reference_frame = 'map'
+
+		# execution checker
+		self.tried = False
+		self.done = False
+		self.start_over_count = 0
+
+		# become a behaviour
+		super(respawn_cube, self).__init__("respawn cube!")
+
+	def update(self):
+		global do_respawn_cube
+
+		if self.start_over_count < start_over_handler:
+			self.done = False
+			self.tried = False
+			self.start_over_count += 1
+
+		if do_respawn_cube:
+			self.done = False
+			self.tried = False
+			do_respawn_cube = False
+
+		if not self.tried:
+			self.tried = True
+			self.respawn_cube_req = self.respawn_cube_srv.call(self.cube_state)
+			return pt.common.Status.RUNNING
+
+		# if succesful
+		else:
+			self.done = True
+			return pt.common.Status.SUCCESS
 
 
 ### TREE
@@ -742,8 +929,22 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 	def __init__(self):
 
 		rospy.loginfo("Initialising behaviour tree")
-		
-		b00 = check_kidnap()
+
+
+		# check for kidnapping and reset if it has happened
+		b000 = check_kidnapping()
+		# request the global position (spawn particles)
+		b001 = global_localization()
+		# do orientation
+		b002 = orientation(100, 0, -1)
+
+		# respawn cube
+		b003 = respawn_cube()
+
+
+		# check standstill while moving
+		b004 = standstill(30, 0.01)
+
 
 		# tuck the arm
 		b0 = tuckarm()
@@ -754,14 +955,14 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 
 		# request the global position (spawn particles)
-		b02 = global_localization()
+		#b02 = global_localization()
 
 
 		# turn in a circle
-		b03 = pt.composites.Selector(
-			name="Turn 360 fallback",
-			children=[counter(82, "Turned?"), go("Turn!", 0, -1)]
-		)
+		#b03 = pt.composites.Selector(
+		#	name="Turn 360 fallback",
+		#	children=[counter(62, "Turned?"), go("Turn!", 0, -1)]
+		#)
 
 
 		# wait a bit for localization
@@ -770,11 +971,6 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 			children=[counter(20, "Waited?"), go("Wait!", 0, 0)]
 		)
 
-
-		b004 = pt.composites.Sequence(
-			name = "initalize location",
-			children= [b01,b02,b03,b04,b00]
-		)
 
 		# go to cube
 		b05 = goto_action("table1")
@@ -809,18 +1005,131 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 
 		# lower head
-		b07 = movehead("down")
+		b12 = movehead("down")
 
 
 		# place cube
-		b12 = pickplace_cube("place")
+		b13 = pickplace_cube("place")
 
 
 		# is cube there? ...
+		b14 = detect_cube("no_detection_reset")
 
+
+
+		'''
+		# lower head
+		b1 = movehead("down")
+
+
+		# detect cube
+		b2 = detect_cube("wait_for_detection")
+
+
+		# pick up cube when detected
+		b3 = pickplace_cube("pick")
+
+
+
+		# turn 180
+		b4 = pt.composites.Selector(
+			name="Turn 180 fallback",
+			children=[counter(31, "Turned?"), go("Turn!", 0, -1)]
+		)
+		# wait a bit
+		b5 = pt.composites.Selector(
+			name="Wait fallback",
+			children=[counter(18, "Waited?"), go("Wait!", 0, 0)]
+		)
+		# move strait to other table
+		b6 = pt.composites.Selector(
+			name="Go to table fallback",
+			children=[counter(15, "At table?"), go("Go to table!", 0.5, 0)]
+		)
+		# go to other table
+		b456 = pt.composites.Sequence(
+			name="Go to other table sequence",
+			children=[b4, b5, b6]
+		)
+
+
+
+		# place the cube
+		b7 = pickplace_cube("place")
+
+
+		# tuck the arm
+		b8 = tuckarm()
+
+
+
+		# turn 180
+		b42 = pt.composites.Selector(
+			name="Turn 180 fallback",
+			children=[counter(31, "Turned?"), go("Turn!", 0, -1)]
+		)
+		# wait a bit
+		b52 = pt.composites.Selector(
+			name="Wait fallback",
+			children=[counter(18, "Waited?"), go("Wait!", 0, 0)]
+		)
+		# move strait to other table
+		b62 = pt.composites.Selector(
+			name="Go to table fallback",
+			children=[counter(15, "At table?"), go("Go to table!", 0.5, 0)]
+		)
+		# go to other table
+		b4562 = pt.composites.Sequence(
+			name="Go to other table sequence",
+			children=[b42, b52, b62]
+		)
+
+
+
+		# check if cube is placed
+		b9 = pt.composites.Selector(
+			name="Go to table fallback",
+			children=[detect_cube("once"), b4562]
+		)
+
+
+		# be happy
+		b10 = pt.composites.Selector(
+			name="Happy fallback",
+			children=[counter(20, "Happy?"), go("Happy!", 0, 1)]
+		)
+		'''
+
+		'''
+
+		# go to door until at door
+		b0 = pt.composites.Selector(
+			name="Go to door fallback", 
+			children=[counter(30, "At door?"), go("Go to door!", 1, 0)]
+		)
+
+		# tuck the arm
+		b1 = tuckarm()
+
+		# go to table
+		b2 = pt.composites.Selector(
+			name="Go to table fallback",
+			children=[counter(5, "At table?"), go("Go to table!", 0, -1)]
+		)
+
+		# move to chair
+		b3 = pt.composites.Selector(
+			name="Go to chair fallback",
+			children=[counter(13, "At chair?"), go("Go to chair!", 1, 0)]
+		)
+
+		# lower head
+		b4 = movehead("down")
+
+		'''
 
 		# become the tree
-		tree = RSequence(name="Main sequence", children=[b004, b0, b05, b06, b07, b08, b09, b10, b11, b12])
+		tree = RSequence(name="Main sequence", children=[b0, b01, b000, b001, b002, b003, b004, b04, b05, b06, b07, b08, b09, b10, b11, b12, b13, b14])
 		super(BehaviourTree, self).__init__(tree)
 
 
