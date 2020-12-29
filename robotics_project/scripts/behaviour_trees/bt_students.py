@@ -943,7 +943,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 
 
 		# check standstill while moving
-		b004 = standstill(30, 0.01)
+		b004 = standstill(1000, 0.01)
 
 
 		# tuck the arm
@@ -1129,7 +1129,7 @@ class BehaviourTree(ptr.trees.BehaviourTree):
 		'''
 
 		# become the tree
-		tree = RSequence(name="Main sequence", children=[b0, b01, b000, b001, b002, b003, b004, b04, b05, b06, b07, b08, b09, b10, b11, b12, b13, b14])
+		tree = RSequence(name="Main sequence", children=[b0, b01, b000, b001, b002, b003,  b004, b04, b05, b06, b07, b08, b09, b10, b11, b12, b13, b14])
 		super(BehaviourTree, self).__init__(tree)
 
 

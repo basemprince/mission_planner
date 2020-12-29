@@ -7,5 +7,5 @@ EBandPlannerROS:
   min_vel_lin: 0.02
   min_vel_th: 0.0
   xy_goal_tolerance: 0.07
-  yaw_goal_tolerance: 0.1
+  yaw_goal_tolerance: 0.05
 
