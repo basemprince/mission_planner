@@ -1,7 +1,8 @@
 # Mobile Manipulation Mission Planner Project
 
-Part of course (DD2410) work
+Part of course (DD2410) work <br>
 
+<img src="rob1.jpeg" alt="drawing" width="700"/>
 
 # Discription
 
